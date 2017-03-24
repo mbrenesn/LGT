@@ -38,6 +38,6 @@ class SparseOp
     LLInt get_neel_index(const Basis &bas);
     LLInt get_random_index(const Basis &bas, bool wtime, bool verbose);
     void construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis, double V,
-      double t, double h, bool magn, bool sites);
+      double t, double h, bool magn, bool sites, bool rand);
 };
 #endif

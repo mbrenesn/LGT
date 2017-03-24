@@ -327,7 +327,7 @@ void SparseOp::determine_allocation_details_(LLInt *int_basis,
 // Computes the Hamiltonian matrix given by means of the integer basis
 /*******************************************************************************/
 void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis, 
-    double V, double t, double h, bool magn, bool sites)
+    double V, double t, double h, bool magn, bool sites, bool rand)
 {
   // Preallocation. For this we need a hint on how many non-zero entries the matrix will
   // have in the diagonal submatrix and the offdiagonal submatrices for each process
@@ -366,43 +366,36 @@ void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis,
   // Hamiltonian matrix construction
   PetscScalar ti = t;
 
-  // Cnl matrix
   std::vector<unsigned int> Cnl(l_ * l_);
-  for(unsigned int i = 0; i < l_; ++i){
-    Cnl[i * l_ + i] = 0;
-    for(unsigned int j = 0; j < l_; ++j){
-      if(j > i) Cnl[i * l_ + j] = l_ - j - 1;
-      else if(j < i) Cnl[i * l_ + j] = l_ - i - 1;
-    }
-  }
-
-  // On-site term prefactor
   std::vector<unsigned int> pre_fact(l_ - 1);
-  pre_fact[0] = l_ / 2;
-  for(unsigned int i = 1; i < (l_ - 1); i += 2){
-    pre_fact[i] = pre_fact[i - 1] - 1;
-    pre_fact[i + 1] = pre_fact[i - 1] - 1;
-  }
-
-  //std::cout << "Pre_fact" << std::endl;
-  //for(unsigned int i = 0; i < (l_ - 1); ++i){
-  //  std::cout << pre_fact[i] << std::endl;
-  //}
- 
   std::vector<int> rand_seq(l_ - 1);
-  if(mpirank_ == 0){
-    boost::random::mt19937 gen;
-    gen.seed(static_cast<LLInt>(std::time(0)));
-    boost::random::uniform_int_distribution<LLInt> dist(-1, 1);
-    for(unsigned int i = 0; i < (l_ - 1); ++i)
-      rand_seq[i] = dist(gen);
+  if(rand){
+    // Cnl matrix
+    for(unsigned int i = 0; i < l_; ++i){
+      Cnl[i * l_ + i] = 0;
+      for(unsigned int j = 0; j < l_; ++j){
+        if(j > i) Cnl[i * l_ + j] = l_ - j - 1;
+        else if(j < i) Cnl[i * l_ + j] = l_ - i - 1;
+      }
+    }
+  
+    // On-site term prefactor
+    pre_fact[0] = l_ / 2;
+    for(unsigned int i = 1; i < (l_ - 1); i += 2){
+      pre_fact[i] = pre_fact[i - 1] - 1;
+      pre_fact[i + 1] = pre_fact[i - 1] - 1;
+    }
+  
+    // Random static charge configuration
+    if(mpirank_ == 0){
+      boost::random::mt19937 gen;
+      gen.seed(static_cast<LLInt>(std::time(0)));
+      boost::random::uniform_int_distribution<LLInt> dist(-1, 1);
+      for(unsigned int i = 0; i < (l_ - 1); ++i)
+        rand_seq[i] = dist(gen);
+    }
+    MPI_Bcast(&rand_seq[0], (l_ - 1), MPI_INT, 0, PETSC_COMM_WORLD);
   }
-  MPI_Bcast(&rand_seq[0], (l_ - 1), MPI_INT, 0, PETSC_COMM_WORLD);
-
-  //std::cout << "rank " << mpirank_ << std::endl; 
-  //for(unsigned int i = 0; i < (l_ - 1); ++i)
-  //  std::cout << rand_seq[i] << " ";
-  //std::cout << std::endl;
 
   // Grab 1 of the states and turn it into bit representation
   for(PetscInt state = start_; state < end_; ++state){
@@ -439,13 +432,16 @@ void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis,
       boost::dynamic_bitset<> bitset = bs;
       
       // Interacting term and Hz2
-      os_term2 += V * pre_fact[site] * spins[site]; // Schwinger
-      //double sigma = 0.0; double q_i = 0.0;
-      //for(unsigned int i = 0; i < (site + 1); ++i){
-      //  sigma += spins[i];
-      //  q_i += rand_seq[i]; 
-      //}
-      //os_term2 += V * sigma * (q_i - ( (site + 1) % 2 ));
+      if(rand){
+        double sigma = 0.0; double q_i = 0.0;
+        for(unsigned int i = 0; i < (site + 1); ++i){
+          sigma += spins[i];
+          q_i += rand_seq[i]; 
+        }
+        os_term2 += V * sigma * (q_i - ( (site + 1) % 2 ));
+      }
+      else 
+        os_term2 += V * pre_fact[site] * spins[site]; // Schwinger
 
       for(unsigned int j = 0; j < (l_ - 1); ++j){
         int_term += V * spins[site] * spins[j] * Cnl[site * l_ + j];
@@ -517,8 +513,9 @@ void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis,
     }
 
     // Important! Cnl is counting twice!
-    PetscScalar diag_term = os_term - os_term2 + (0.5 * int_term); // Schwinger
-    //PetscScalar diag_term = os_term + os_term2 + (0.5 * int_term);
+    PetscScalar diag_term;
+    if(rand) diag_term = os_term + os_term2 + (0.5 * int_term);
+    else diag_term = os_term - os_term2 + (0.5 * int_term); // Schwinger
     MatSetValues(ham_mat, 1, &state, 1, &state, &diag_term, ADD_VALUES);
 
     spins.erase(spins.begin(), spins.begin() + l_);
