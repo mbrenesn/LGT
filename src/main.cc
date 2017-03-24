@@ -33,7 +33,7 @@ int main(int argc, char **argv)
     else continue;
   }
 
-  if(l = 777 || n = 777 || J = 0.7771777 || w < 0.7771777 || m < 0.777177){
+  if(l == 777 || n == 777 || J == 0.7771777 || w == 0.7771777 || m == 0.777177){
     std::cerr << "Error setting parameters" << std::endl;
     std::cerr << "Usage: mpirun -np <proc> " << argv[0] << 
       " -l [sites] -n [fill] -J [J] -w [w] -m [m] -[PETSc/SLEPc options]" << std::endl;
@@ -46,6 +46,19 @@ int main(int argc, char **argv)
 
   // Establish the environment
   Environment env(argc, argv, l, n);
+
+  PetscLogDouble time1, time2;
+  PetscTime(&time1);
+
+  PetscMPIInt mpirank = env.mpirank;
+  PetscMPIInt mpisize = env.mpisize;
+
+  if(mpirank == 0){  
+    std::cout << "LGT" << std::endl;    
+    std::cout << "System has " << l << " sites and " << n << " spins ^" << std::endl;
+    std::cout << "Simulation with " << mpisize << " total MPI processes" << std::endl;
+    std::cout << "Parameters: J = " << J << " w = " << w << " m = " << m << std::endl;
+  }
 
   // Establish the basis environment, by pointer, to call an early destructor and reclaim
   // basis memory
@@ -65,7 +78,7 @@ int main(int argc, char **argv)
   
   // Construct the Hamiltonian matrix
   schwinger.construct_schwinger_hamiltonian(sch_mat, basis->int_basis, V, t, h,
-    true, true);
+    true, true, true);
 
   // Neel index before destroying basis, returns the index on the processor that found it,
   // and -1 on all the rest
@@ -152,7 +165,6 @@ int main(int argc, char **argv)
   //TimeEvo te(env);
   //te.loschmidt_echo(schwinger, iterations, times, tol, maxits, v, sch_mat, true, true);
  
-  PetscTime(&kryt2);
   /*** End of time evolution ***/
   
   /*** Entanglement entropy ***/
@@ -162,10 +174,19 @@ int main(int argc, char **argv)
 
   /*** End of entanglement entropy ***/
 
+  PetscTime(&kryt2);
+
   delete basis;
 
   VecDestroy(&v);
   MatDestroy(&sch_mat);
+
+  PetscTime(&time2);
+
+  if(mpirank == 0){  
+    std::cout << "Time Krylov Evolution: " << kryt2 - kryt1 << " seconds" << std::endl;
+    std::cout << "Time total: " << time2 - time1 << " seconds" << std::endl; 
+  }
 
   return 0;
 }
