@@ -93,10 +93,10 @@ void HalfChainEnt::construct_redmat_indices_(LLInt *int_basis, std::vector<LLInt
     }
   }
  
-  std::cout << "Proc " << mpirank_ << " red local " << red_local_ << std::endl;
-  for(unsigned int i = 0; i < i_ind.size(); ++i){
-    std::cout << "I ind " << i_ind[i] << " J ind " << j_ind[i] << std::endl;
-  }
+  //std::cout << "Proc " << mpirank_ << " red local " << red_local_ << std::endl;
+  //for(unsigned int i = 0; i < i_ind.size(); ++i){
+  //  std::cout << "I ind " << i_ind[i] << " J ind " << j_ind[i] << std::endl;
+  //}
 
   delete [] a_basis;
   delete [] b_basis;
