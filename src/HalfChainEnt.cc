@@ -62,7 +62,7 @@ void HalfChainEnt::construct_connected_basis_(LLInt *int_basis, LLInt *a_basis, 
     MPI_LONG_LONG, PETSC_COMM_WORLD);
   MPI_Allgatherv(local_b_basis, nlocal_, MPI_LONG_LONG, b_basis, recvcounts, displs,
     MPI_LONG_LONG, PETSC_COMM_WORLD);
-
+  
   delete [] local_a_basis;
   delete [] local_b_basis;
   delete [] recvcounts;
@@ -75,7 +75,7 @@ void HalfChainEnt::construct_redmat_indices_(LLInt *int_basis, std::vector<LLInt
   LLInt *a_basis = new LLInt[basis_size_];
   LLInt *b_basis = new LLInt[basis_size_];
   construct_connected_basis_(int_basis, a_basis, b_basis);
-
+  
   LLInt row_ind, col_ind;
   for(PetscInt state = start_; state < end_; ++state){
   
@@ -92,7 +92,7 @@ void HalfChainEnt::construct_redmat_indices_(LLInt *int_basis, std::vector<LLInt
       }
     }
   }
- 
+  
   //std::cout << "Proc " << mpirank_ << " red local " << red_local_ << std::endl;
   //for(unsigned int i = 0; i < i_ind.size(); ++i){
   //  std::cout << "I ind " << i_ind[i] << " J ind " << j_ind[i] << std::endl;
@@ -141,11 +141,11 @@ void HalfChainEnt::construct_redmat_(Mat &red_mat, Vec &v_dist, Vec &v_local,
 {
   MatZeroEntries(red_mat);
   PetscScalar *cij;
-
+  
   VecScatterCreateToAll(v_dist, &ctx, &v_local);
   VecScatterBegin(ctx, v_dist, v_local, INSERT_VALUES, SCATTER_FORWARD);
   VecScatterEnd(ctx, v_dist, v_local, INSERT_VALUES, SCATTER_FORWARD);
-
+  
   VecGetArray(v_local, &cij);
 
   ULLInt index_size = i_ind.size();
@@ -182,9 +182,9 @@ void HalfChainEnt::von_neumann_entropy(LLInt *int_basis, Vec &v, const Mat &ham_
   first_coef.reserve(nlocal_);
   std::vector<LLInt> second_coef;
   second_coef.reserve(nlocal_);
- 
+
   construct_redmat_indices_(int_basis, i_ind, j_ind, first_coef, second_coef);
- 
+  
   if(i_ind.size() != j_ind.size() || first_coef.size() != second_coef.size()){
     std::cerr << "Error with indices for reduced density matrix!" << std::endl;
     MPI_Abort(PETSC_COMM_WORLD, 1);
