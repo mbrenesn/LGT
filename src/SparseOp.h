@@ -33,6 +33,7 @@ class SparseOp
     Vec magnetization;
     Vec hmag;
     Vec hmag_1;
+    Vec hmag_2;
     inline LLInt binary_to_int(boost::dynamic_bitset<> bs);
     inline LLInt binsearch(const LLInt *array, LLInt len, LLInt value);
     LLInt get_neel_index(const Basis &bas);
