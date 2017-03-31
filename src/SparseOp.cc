@@ -1,7 +1,7 @@
 #include "SparseOp.h"
 
 SparseOp::SparseOp(const Environment &env, const Basis &basis)
-: magnetization(NULL), hmag(NULL), hmag_1(NULL)
+: magnetization(NULL), hmag(NULL), hmag_1(NULL), hmag_2(NULL)
 {
   l_ = env.l;
   n_ = env.n;
@@ -29,6 +29,7 @@ SparseOp::SparseOp(const SparseOp &rhs)
   magnetization = NULL;
   hmag = NULL;
   hmag_1 = NULL;
+  hmag_2 = NULL;
 }
 
 /*******************************************************************************/
@@ -50,6 +51,7 @@ SparseOp &SparseOp::operator=(const SparseOp &rhs)
   magnetization = NULL;
   hmag = NULL;
   hmag_1 = NULL;
+  hmag_2 = NULL;
 
   return *this;
 }
@@ -59,6 +61,7 @@ SparseOp::~SparseOp()
   VecDestroy(&magnetization); 
   VecDestroy(&hmag);
   VecDestroy(&hmag_1);
+  VecDestroy(&hmag_2);
 }
 
 LLInt SparseOp::mod_(LLInt a, LLInt b)
@@ -361,6 +364,7 @@ void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis,
     VecSetSizes(hmag, nlocal_, basis_size_);
     VecSetType(hmag, VECMPI);
     VecDuplicate(hmag, &hmag_1);
+    VecDuplicate(hmag, &hmag_2);
   }
 
   // Hamiltonian matrix construction
@@ -368,25 +372,25 @@ void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis,
 
   std::vector<unsigned int> Cnl(l_ * l_);
   std::vector<unsigned int> pre_fact(l_ - 1);
+  // Cnl matrix
+  for(unsigned int i = 0; i < l_; ++i){
+    Cnl[i * l_ + i] = 0;
+    for(unsigned int j = 0; j < l_; ++j){
+      if(j > i) Cnl[i * l_ + j] = l_ - j - 1;
+      else if(j < i) Cnl[i * l_ + j] = l_ - i - 1;
+    }
+  }
+
+  // On-site term prefactor
+  pre_fact[0] = l_ / 2;
+  for(unsigned int i = 1; i < (l_ - 1); i += 2){
+    pre_fact[i] = pre_fact[i - 1] - 1;
+    pre_fact[i + 1] = pre_fact[i - 1] - 1;
+  }
+
+  // Random static charge configuration
   std::vector<int> rand_seq(l_ - 1);
   if(rand){
-    // Cnl matrix
-    for(unsigned int i = 0; i < l_; ++i){
-      Cnl[i * l_ + i] = 0;
-      for(unsigned int j = 0; j < l_; ++j){
-        if(j > i) Cnl[i * l_ + j] = l_ - j - 1;
-        else if(j < i) Cnl[i * l_ + j] = l_ - i - 1;
-      }
-    }
-  
-    // On-site term prefactor
-    pre_fact[0] = l_ / 2;
-    for(unsigned int i = 1; i < (l_ - 1); i += 2){
-      pre_fact[i] = pre_fact[i - 1] - 1;
-      pre_fact[i + 1] = pre_fact[i - 1] - 1;
-    }
-  
-    // Random static charge configuration
     if(mpirank_ == 0){
       boost::random::mt19937 gen;
       gen.seed(static_cast<LLInt>(std::time(0)));
@@ -421,8 +425,10 @@ void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis,
     if(sites){
       double site_half_mag = 0.5 * (spins[(l_ / 2) - 1] + 1);
       double site_half_mag_1 = 0.5 * (spins[(l_ / 2)] + 1);
+      double site_half_mag_2 = 0.5 * (spins[(l_ / 2) + 1] + 1);
       VecSetValue(hmag, state, site_half_mag, INSERT_VALUES);
       VecSetValue(hmag_1, state, site_half_mag_1, INSERT_VALUES);
+      VecSetValue(hmag_2, state, site_half_mag_2, INSERT_VALUES);
     }
 
     // Loop over all sites of the bit representation
@@ -535,8 +541,10 @@ void SparseOp::construct_schwinger_hamiltonian(Mat &ham_mat, LLInt *int_basis,
   if(sites){
     VecAssemblyBegin(hmag);
     VecAssemblyBegin(hmag_1);
+    VecAssemblyBegin(hmag_2);
     VecAssemblyEnd(hmag);
     VecAssemblyEnd(hmag_1);
+    VecAssemblyEnd(hmag_2);
   }
 
   MatAssemblyBegin(ham_mat, MAT_FINAL_ASSEMBLY);
